@@ -3,7 +3,7 @@
 <head> 
     <meta charset="UTF-8"> 
     <meta name="viewport" content="width=device-width, initial-scale=1.0"> 
-    <title>Mixing Inventory (Login Secured)</title> 
+    <title>Mixing Inventory (Session Secured)</title> 
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script> 
     <script src='https://unpkg.com/tesseract.js@v2.1.0/dist/tesseract.min.js'></script> 
  
@@ -15,14 +15,14 @@
         h2 { text-align: center; margin-bottom: 10px; font-size: 2.5rem; color: #eee; font-weight: bold; letter-spacing: 1px; } 
  
         /* ========================================= */
-        /* 🔒 登入畫面樣式 (新增部分)                 */
+        /* 🔒 登入畫面樣式                            */
         /* ========================================= */
         #login-overlay {
             position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
             background-color: #000;
             z-index: 10000; /* 最高層級，蓋住所有內容 */
-            display: flex;
+            display: flex; /* 預設顯示，由 JS 決定是否隱藏 */
             justify-content: center;
             align-items: center;
             flex-direction: column;
@@ -347,7 +347,7 @@
         }; 
 
         // 🔑 系統密碼 (可在這裡修改)
-        const APP_PASSWORD = "1122334";
+        const APP_PASSWORD = "122334";
         // ========================================== 
  
         let savedUser = localStorage.getItem('currentUser') || "Default";  
@@ -375,13 +375,21 @@
         let isCameraActive = false; 
 
         // ========================================== 
-        // 🔒 登入/鎖定 功能邏輯
+        // 🔒 登入/鎖定 功能邏輯 (sessionStorage 版)
         // ========================================== 
         
-        // 頁面載入時聚焦在密碼框
-        window.onload = function() {
-            document.getElementById('login-pwd').focus();
-        };
+        // 頁面載入時檢查登入狀態
+        window.addEventListener('load', function() {
+            // 檢查 sessionStorage 是否有已登入標記
+            if (sessionStorage.getItem('isLoggedIn') === 'true') {
+                // 如果已經登入過，隱藏遮罩
+                document.getElementById('login-overlay').style.display = 'none';
+            } else {
+                // 如果沒有，顯示遮罩並聚焦輸入框
+                document.getElementById('login-overlay').style.display = 'flex';
+                document.getElementById('login-pwd').focus();
+            }
+        });
 
         // 監聽密碼框 Enter 鍵
         document.getElementById('login-pwd').addEventListener("keypress", function(event) {
@@ -394,7 +402,9 @@
             const input = document.getElementById('login-pwd');
             const val = input.value;
             if (val === APP_PASSWORD) {
-                // 登入成功
+                // 登入成功：寫入 sessionStorage 標記
+                sessionStorage.setItem('isLoggedIn', 'true');
+                
                 document.getElementById('login-overlay').style.display = 'none';
                 input.value = ""; // 清空密碼框
             } else {
@@ -405,14 +415,16 @@
         }
 
         function lockApp() {
+            // 手動鎖定：清除 sessionStorage 標記
+            sessionStorage.removeItem('isLoggedIn');
+            
             document.getElementById('login-overlay').style.display = 'flex';
             document.getElementById('login-pwd').focus();
             
-            // 鎖定時停止相機以省電
-            if (isCameraActive) {
-                // 模擬點擊切換來關閉相機，或者直接暫停
-                // 這裡我們簡單處理，不強制關閉相機，只遮蔽畫面
-                // 如果需要強制關閉相機，可以呼叫 stopScanning()
+            // 鎖定時停止相機以省電 (可選)
+            if (isScanning) {
+                // stopScanning(); 
+                // 視需求決定是否要完全關閉相機，這裡保持現狀僅遮蔽
             }
         }
         // ========================================== 
@@ -850,7 +862,7 @@
                     link.click(); 
                     document.body.removeChild(link); 
                     URL.revokeObjectURL(url); 
-                    alert("✅ 匯出完成: " + filename); // 🐛 Fixed typo: fileName -> filename
+                    alert("✅ 匯出完成: " + filename); 
                 }, 100); 
             } catch (err) { alert("匯出錯誤: " + err); } 
         } 
