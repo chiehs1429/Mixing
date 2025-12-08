@@ -10,8 +10,8 @@
 
     <style>
         /* =========================================
-           CSS 樣式設定
-           ========================================= */
+            CSS 樣式設定
+            ========================================= */
         * { box-sizing: border-box; }
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 800px; margin: 0 auto; padding: 10px; background-color: #222; color: #fff; }
         
@@ -139,8 +139,8 @@
         th { background-color: #333; color: white; white-space: nowrap; font-weight: bold; }
         
         .code-col { width: 30%; word-break: break-all; } 
-        .loc-col { width: 15%; text-align: center; }      
-        .name-col { width: 20%; }                          
+        .loc-col { width: 15%; text-align: center; } 
+        .name-col { width: 20%; } 
         
         th.qty-col, td.qty-col { 
             width: 10%; 
@@ -713,11 +713,22 @@
 
             fetch(SYSTEM_CONFIG.API_URL, {
                 method: 'POST',
+                // 建議加上 Content-Type: text/plain;charset=utf-8 以避免 Apps Script CORS 問題
+                headers: { "Content-Type": "text/plain;charset=utf-8" }, 
                 body: JSON.stringify(payload)
             })
             .then(response => response.text())
             .then(data => {
                 document.getElementById('loading-overlay').style.display = 'none';
+                
+                // ===============================================
+                // 💡 關鍵修正：上傳成功後清空庫位 (lastLocation)
+                // ===============================================
+                if (data.startsWith('✅')) { 
+                    lastLocation = ""; // 1. 清空變數
+                    localStorage.setItem('lastLocation', lastLocation); // 2. 更新本地儲存
+                }
+                
                 alert("✅ " + data);
             })
             .catch(error => {
@@ -734,13 +745,13 @@
             try {
                 let csv = "\uFEFFCode,Spec,Location,Name,Qty\n";
                 for (let k in inventory) {
-                      let safeName = (inventory[k].name || "").replace(/,/g, " ").replace(/"/g, "");
-                      let loc = (inventory[k].location || "").replace(/,/g, " ");
-                      let parts = k.split('-');
-                      let middleTxt = parts.length >= 3 ? parts[1] : "";
-                      let qtyFormatted = inventory[k].qty.toFixed(appSettings.decimals);
+                     let safeName = (inventory[k].name || "").replace(/,/g, " ").replace(/"/g, "");
+                     let loc = (inventory[k].location || "").replace(/,/g, " ");
+                     let parts = k.split('-');
+                     let middleTxt = parts.length >= 3 ? parts[1] : "";
+                     let qtyFormatted = inventory[k].qty.toFixed(appSettings.decimals);
 
-                      csv += '="' + k + '","' + middleTxt + '","' + loc + '","' + safeName + '",' + qtyFormatted + '\n';
+                     csv += '="' + k + '","' + middleTxt + '","' + loc + '","' + safeName + '",' + qtyFormatted + '\n';
                 }
                 let blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
                 let url = URL.createObjectURL(blob);
