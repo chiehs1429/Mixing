@@ -706,9 +706,17 @@
             document.getElementById('loading-overlay').style.display = 'flex';
             document.getElementById('loading-text').innerText = "上傳中... Uploading...";
 
+            // ============================================
+            // 💡 修改處：轉換 Key 為純文字 (前面加上 ')
+            // ============================================
+            let itemsPlain = {};
+            for (let k in inventory) {
+                itemsPlain["'" + k] = inventory[k];
+            }
+
             const payload = {
                 user: savedUser,
-                items: inventory
+                items: itemsPlain // 使用轉換後的物件上傳
             };
 
             fetch(SYSTEM_CONFIG.API_URL, {
@@ -721,9 +729,6 @@
             .then(data => {
                 document.getElementById('loading-overlay').style.display = 'none';
                 
-                // ===============================================
-                // 💡 關鍵修正：上傳成功後清空庫位 (lastLocation)
-                // ===============================================
                 if (data.startsWith('✅')) { 
                     lastLocation = ""; // 1. 清空變數
                     localStorage.setItem('lastLocation', lastLocation); // 2. 更新本地儲存
