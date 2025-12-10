@@ -3,15 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mixing Inventory System (India Time)</title>
+    <title>Mixing Inventory (India Time)</title>
     
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
     <script src='https://unpkg.com/tesseract.js@v2.1.0/dist/tesseract.min.js'></script>
 
     <style>
         /* =========================================
-            CSS 樣式設定
-            ========================================= */
+           CSS 樣式設定
+           ========================================= */
         * { box-sizing: border-box; }
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 800px; margin: 0 auto; padding: 10px; background-color: #222; color: #fff; }
         
@@ -139,8 +139,8 @@
         th { background-color: #333; color: white; white-space: nowrap; font-weight: bold; }
         
         .code-col { width: 30%; word-break: break-all; } 
-        .loc-col { width: 15%; text-align: center; } 
-        .name-col { width: 20%; } 
+        .loc-col { width: 15%; text-align: center; }      
+        .name-col { width: 20%; }                          
         
         th.qty-col, td.qty-col { 
             width: 10%; 
@@ -186,7 +186,7 @@
     <div class="user-bar">
         <label>👤 人員代號 (User):</label>
         <input type="text" id="userInput" class="input-field" placeholder="請先輸入代號" onchange="changeUser(this.value)">
-        </div>
+    </div>
 
     <div class="mode-switch">
         <button class="mode-btn active" onclick="switchMode('barcode')">
@@ -292,11 +292,11 @@
         // 🔧 系統核心參數
         // ==========================================
         const SYSTEM_CONFIG = {
-            API_URL: "https://script.google.com/macros/s/AKfycbxwRGT0btYIvhrkR44DCI323IlCmOoPM63A-jIw20El4WiDRt8goUCgAYGbuxhvMLe5Ig/exec",
+            API_URL: "https://script.google.com/macros/s/AKfycbx2-jdXBV14bJC8SCat_Ri40SBEoH77JzstKvUV7kgdLbww-aFS1jHOEk6aMPnrxTesig/exec",
             SHEET_URL: "https://docs.google.com/spreadsheets/d/1_85YEZSQFARb7HgA2hfNOj4bxoptdjqQfAqq3Y0uY9o/edit?gid=0#gid=0"
         };
         
-        // 登入邏輯相關代碼已移除
+        // ===================
 
         let savedUser = localStorage.getItem('currentUser') || "Default"; 
         document.getElementById('userInput').value = savedUser;
@@ -668,10 +668,25 @@
                     localStorage.setItem('lastLocation', lastLocation);
                 }
 
+                // ============================================
+                // 🕒 印度時間 (IST) 紀錄功能 (UTC+5:30)
+                // ============================================
+                const d = new Date();
+                const utc = d.getTime() + (d.getTimezoneOffset() * 60000);
+                const nd = new Date(utc + (3600000 * 5.5)); // +5.5 hours for IST
+                const year = nd.getFullYear();
+                const month = String(nd.getMonth() + 1).padStart(2, '0');
+                const day = String(nd.getDate()).padStart(2, '0');
+                const hour = String(nd.getHours()).padStart(2, '0');
+                const minute = String(nd.getMinutes()).padStart(2, '0');
+                const second = String(nd.getSeconds()).padStart(2, '0');
+                const istTime = `${year}/${month}/${day} ${hour}:${minute}:${second}`;
+
                 inventory[code] = {
                     name: name || "No Name",
                     qty: qty,
-                    location: location
+                    location: location,
+                    scanTime: istTime // 儲存時間
                 };
 
                 saveCurrentInventory();
@@ -703,37 +718,27 @@
             
             if(!confirm("確定上傳至雲端?")) return;
 
+            // === 修改處：強制在確認後立刻清空庫位記憶 ===
+            // 這樣不需要等雲端回應，下一次掃描庫位就會是空白
+            lastLocation = "";
+            localStorage.removeItem('lastLocation'); 
+            // ===================================
+
             document.getElementById('loading-overlay').style.display = 'flex';
             document.getElementById('loading-text').innerText = "上傳中... Uploading...";
 
-            // ============================================
-            // 💡 修改處：轉換 Key 為純文字 (前面加上 ')
-            // ============================================
-            let itemsPlain = {};
-            for (let k in inventory) {
-                itemsPlain["'" + k] = inventory[k];
-            }
-
             const payload = {
                 user: savedUser,
-                items: itemsPlain // 使用轉換後的物件上傳
+                items: inventory
             };
 
             fetch(SYSTEM_CONFIG.API_URL, {
                 method: 'POST',
-                // 建議加上 Content-Type: text/plain;charset=utf-8 以避免 Apps Script CORS 問題
-                headers: { "Content-Type": "text/plain;charset=utf-8" }, 
                 body: JSON.stringify(payload)
             })
             .then(response => response.text())
             .then(data => {
                 document.getElementById('loading-overlay').style.display = 'none';
-                
-                if (data.startsWith('✅')) { 
-                    lastLocation = ""; // 1. 清空變數
-                    localStorage.setItem('lastLocation', lastLocation); // 2. 更新本地儲存
-                }
-                
                 alert("✅ " + data);
             })
             .catch(error => {
@@ -748,15 +753,17 @@
 
             alert("1. 準備匯出... (Starting Export)");
             try {
-                let csv = "\uFEFFCode,Spec,Location,Name,Qty\n";
+                // === 修改處：增加 Time 欄位 ===
+                let csv = "\uFEFFCode,Spec,Location,Name,Qty,Time\n";
                 for (let k in inventory) {
-                     let safeName = (inventory[k].name || "").replace(/,/g, " ").replace(/"/g, "");
-                     let loc = (inventory[k].location || "").replace(/,/g, " ");
-                     let parts = k.split('-');
-                     let middleTxt = parts.length >= 3 ? parts[1] : "";
-                     let qtyFormatted = inventory[k].qty.toFixed(appSettings.decimals);
+                      let safeName = (inventory[k].name || "").replace(/,/g, " ").replace(/"/g, "");
+                      let loc = (inventory[k].location || "").replace(/,/g, " ");
+                      let parts = k.split('-');
+                      let middleTxt = parts.length >= 3 ? parts[1] : "";
+                      let qtyFormatted = inventory[k].qty.toFixed(appSettings.decimals);
+                      let timeStr = inventory[k].scanTime || ""; // 取得時間
 
-                     csv += '="' + k + '","' + middleTxt + '","' + loc + '","' + safeName + '",' + qtyFormatted + '\n';
+                      csv += '="' + k + '","' + middleTxt + '","' + loc + '","' + safeName + '",' + qtyFormatted + ',"' + timeStr + '"\n';
                 }
                 let blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
                 let url = URL.createObjectURL(blob);
