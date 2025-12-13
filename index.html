@@ -3,10 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mixing Inventory (India Time)</title>
+    <title>Mixing Inventory (Scanner V2)</title>
     
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
-    <script src='https://unpkg.com/tesseract.js@v2.1.0/dist/tesseract.min.js'></script>
 
     <style>
         /* =========================================
@@ -29,77 +28,45 @@
             background: #fff; color: #000; font-size: 1.1rem; letter-spacing: 1px; font-weight: bold;
         }
         
-        /* 模式切換按鈕 */
-        .mode-switch { display: flex; gap: 8px; margin-bottom: 10px; }
-        .mode-btn { 
-            flex: 1; padding: 8px; border: none; border-radius: 20px; 
-            background: #333; color: #aaa; font-weight: bold; cursor: pointer; transition: 0.3s; 
-            display: flex; flex-direction: column; align-items: center; line-height: 1.2; font-size: 0.9rem;
-        }
-        .mode-btn small { font-size: 0.7rem; font-weight: normal; opacity: 0.8; }
-        .mode-btn.active { background: #007bff; color: white; box-shadow: 0 0 10px rgba(0,123,255,0.5); }
-
-        /* 視窗區域 */
-        .viewport { 
-            position: relative; 
-            width: 100%; 
-            height: 50vh; 
-            background: black; 
-            border-radius: 10px; 
-            overflow: hidden; 
+        /* 視窗區域 (整合新版樣式) */
+        #camera-wrapper { 
+            position: relative;
+            width: 100%;
+            height: 50vh; /* 維持原本的高度設定 */
+            background: black;
+            border-radius: 10px;
+            overflow: hidden;
             margin-bottom: 10px;
             border: 1px solid #444;
             cursor: pointer;
             -webkit-tap-highlight-color: transparent;
             z-index: 1;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
         }
-        #reader, #ocr-video { width: 100%; height: 100%; object-fit: cover; }
-        #ocr-video { display: none; }
+        #reader { width: 100%; height: 100%; object-fit: cover; }
 
-        .scan-guide-overlay {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            pointer-events: none; display: none; z-index: 10;
-        }
-        .guide-box {
+        /* 掃描框線特效 */
+        #scan-overlay {
             position: absolute; top: 50%; left: 50%;
             transform: translate(-50%, -50%);
-            width: 96%; 
-            height: 50px;
-            border: 2px solid #ff4d4d; 
-            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.7);
-            border-radius: 4px;
-            transition: 0.3s all;
-        }
-        .guide-box.ready { border-color: #00ff00; box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.8); }
-        .guide-box.paused { border-color: #007bff; box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.6); }
-
-        .guide-line {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            width: 280px; 
-            max-width: 90%;
-            height: 30px; 
-            background-color: rgba(255, 77, 77, 0.3); 
-            transform: translate(-50%, -50%);
+            width: 250px; height: 250px;
+            border: 4px solid #00ff00;
+            box-shadow: 0 0 0 1000px rgba(0,0,0,0.5);
+            z-index: 10;
+            border-radius: 20px;
             pointer-events: none;
-            transition: 0.3s all;
-            box-shadow: 0 0 2px rgba(255,0,0,0.5);
+            display: none; 
         }
-        .guide-box.ready .guide-line { background-color: rgba(0, 255, 0, 0.3); }
-        .guide-box.paused .guide-line { background-color: rgba(0, 123, 255, 0.3); }
 
-        .guide-text {
-            position: absolute; top: -45px; left: 0; width: 100%;
-            text-align: center; color: #ff4d4d; font-size: 0.9rem; font-weight: bold;
-            text-shadow: 1px 1px 2px black;
-            transition: 0.3s all;
-            background: rgba(0,0,0,0.6);
-            padding: 4px 0;
-            border-radius: 4px;
+        /* 提示文字 */
+        .camera-hint {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            display: flex; justify-content: center; align-items: center;
+            color: white; font-size: 1.2rem; font-weight: bold;
+            text-align: center; z-index: 20; pointer-events: none;
+            white-space: pre-line;
+            text-shadow: 1px 1px 4px black;
         }
-        .guide-box.ready .guide-text { color: #00ff00; content: "✅ Ready"; }
-        .guide-box.paused .guide-text { color: #007bff; }
 
         /* 功能按鈕區 */
         .controls { display: flex; gap: 8px; padding: 5px 0; justify-content: space-between; margin-bottom: 10px; flex-wrap: wrap;}
@@ -108,28 +75,15 @@
             padding: 8px 5px; border: none; border-radius: 8px; cursor: pointer; 
             font-weight: bold; font-size: 0.9rem; color: white; transition: 0.2s;
             display: flex; flex-direction: column; justify-content: center; align-items: center;
-            line-height: 1.2;
-            position: relative;
-            z-index: 100;
-            flex: 1;
-            min-width: 60px;
+            line-height: 1.2; position: relative; z-index: 100; flex: 1; min-width: 60px;
         }
         button.action-btn small { font-size: 0.7rem; font-weight: normal; opacity: 0.9; margin-top: 2px; }
 
         .btn-clear { background-color: #6c757d; } 
-        .btn-flash { background-color: #ffc107; color: #333 !important; display: none; } /* 預設隱藏，有支援才顯示 */
         .btn-export { background-color: #28a745; }
         .btn-settings { background-color: #17a2b8; }
         .btn-upload { background-color: #007bff; }
         .btn-sheet { background-color: #6610f2; } 
-
-        #loading-overlay {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.85); display: none;
-            justify-content: center; align-items: center; flex-direction: column; z-index: 20;
-        }
-        .spinner { border: 4px solid #f3f3f3; border-top: 4px solid #dc3545; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin-bottom: 15px;}
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
         /* 表格樣式 */
         .table-container { margin-top: 0; overflow-x: auto; background: #fff; border-radius: 8px; color: #333; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
@@ -143,11 +97,8 @@
         .name-col { width: 20%; }                          
         
         th.qty-col, td.qty-col { 
-            width: 10%; 
-            text-align: center; 
-            font-weight: bold; 
-            background-color: #000 !important; 
-            color: #fff !important; 
+            width: 10%; text-align: center; font-weight: bold; 
+            background-color: #000 !important; color: #fff !important; 
         } 
         
         .action-col { width: 25%; text-align: center; white-space: nowrap; }
@@ -169,17 +120,27 @@
         .setting-group input, .setting-group select { width: 100%; padding: 8px; border-radius: 4px; border: 1px solid #555; background: #222; color: white; }
         .modal-actions { display: flex; gap: 10px; margin-top: 20px; }
 
-        /* 唯讀輸入框樣式 */
         .input-readonly {
-            background-color: #444 !important;
-            color: #aaa !important;
-            border: none !important;
-            cursor: not-allowed;
-            font-size: 0.8rem;
+            background-color: #444 !important; color: #aaa !important;
+            border: none !important; cursor: not-allowed; font-size: 0.8rem;
         }
+        
+        /* Loading Overlay (上傳用) */
+        #loading-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85); display: none;
+            justify-content: center; align-items: center; flex-direction: column; z-index: 300;
+        }
+        .spinner { border: 4px solid #f3f3f3; border-top: 4px solid #dc3545; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin-bottom: 15px;}
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
+
+    <div id="loading-overlay">
+        <div class="spinner"></div>
+        <div style="color:white; font-weight:bold;" id="loading-text">處理中...</div>
+    </div>
 
     <h2>Mixing Inventory</h2>
 
@@ -188,39 +149,15 @@
         <input type="text" id="userInput" class="input-field" placeholder="請先輸入代號" onchange="changeUser(this.value)">
     </div>
 
-    <div class="mode-switch">
-        <button class="mode-btn active" onclick="switchMode('barcode')">
-            條碼/QR<small>Barcode & QR</small>
-        </button>
-        <button class="mode-btn" onclick="switchMode('ocr')">
-            文字識別<small>OCR Text</small>
-        </button>
-    </div>
-
-    <div class="viewport" onclick="handleViewportClick()">
+    <div id="camera-wrapper" onclick="handleCameraClick()">
+        <div id="scan-overlay"></div>
         <div id="reader"></div>
-        <video id="ocr-video" autoplay playsinline></video>
-        
-        <div id="ocr-overlay" class="scan-guide-overlay">
-            <div class="guide-box" id="guideBox">
-                <div class="guide-line"></div>
-                <div class="guide-text" id="guideText">👆 點擊畫面啟動相機</div>
-            </div>
-        </div>
-
-        <div id="loading-overlay">
-            <div class="spinner"></div>
-            <div style="color:white; font-weight:bold;" id="loading-text">分析中...</div>
-        </div>
+        <div id="cam-hint-text" class="camera-hint">👆 點擊畫面開始掃描</div>
     </div>
 
     <div class="controls">
         <button class="btn-clear action-btn" onclick="clearData()">
             🗑️ 清除<small>Clear</small>
-        </button>
-        
-        <button id="btn-flash" class="btn-flash action-btn" onclick="toggleTorch()">
-            🔦 補光<small>Light</small>
         </button>
         
         <button class="btn-settings action-btn" onclick="openSettings()">
@@ -297,7 +234,8 @@
         };
         
         // ===================
-
+        // 資料與設定相關變數
+        // ===================
         let savedUser = localStorage.getItem('currentUser') || "Default"; 
         document.getElementById('userInput').value = savedUser;
         let inventory = {}; 
@@ -310,16 +248,112 @@
         if (!appSettings.filenameFormat) appSettings.filenameFormat = "USER_YYYYMMDDHHmmss";
         localStorage.setItem('appSettings', JSON.stringify(appSettings));
 
-        let html5QrcodeScanner = null;
-        let ocrStream = null;
-        let ocrAnalysisInterval = null;
-        let currentMode = 'barcode'; 
-        let videoTrack = null; 
-        let isTorchOn = false;
-        let isScanning = false; 
-        let isCameraActive = false;
-
+        // 載入庫存
         loadInventoryForUser(savedUser);
+
+        // ==========================================
+        // 📷 掃描邏輯 (Standalone Scanner Integration)
+        // ==========================================
+        let html5QrCode = null;
+        let isScanning = false;
+        let currentDetectedCode = null;
+
+        // 處理點擊邏輯
+        function handleCameraClick() {
+            if (!isScanning) {
+                startScan(); // 如果沒在掃，就開始
+            } else {
+                captureScan(); // 如果正在掃，就抓取
+            }
+        }
+
+        // 1. 啟動相機
+        function startScan() {
+            const overlay = document.getElementById('scan-overlay');
+            const hint = document.getElementById('cam-hint-text');
+            
+            currentDetectedCode = null; // 重置暫存
+
+            if (!html5QrCode) {
+                html5QrCode = new Html5Qrcode("reader");
+            }
+
+            const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+
+            // 使用後鏡頭 (environment)
+            html5QrCode.start({ facingMode: "environment" }, config, 
+                (decodedText) => {
+                    // [成功偵測]
+                    currentDetectedCode = decodedText;
+                    // 更新提示文字 (變黃色)
+                    hint.innerText = `🔍 已偵測：\n${decodedText}\n(再次點擊畫面確認)`;
+                    hint.style.color = "#ffff00"; 
+                },
+                (errorMessage) => {
+                    // 掃描中...
+                }
+            ).then(() => {
+                // [啟動成功]
+                isScanning = true;
+                overlay.style.display = "block"; // 顯示綠框
+                hint.style.display = "flex";
+                hint.innerText = "👀 掃描中... 請對準條碼/QR";
+                hint.style.color = "white";
+            }).catch(err => {
+                alert("無法啟動相機，請確認權限或使用 HTTPS 連線。\n錯誤：" + err);
+                isScanning = false;
+            });
+        }
+
+        // 2. 抓取資料並停止
+        function captureScan() {
+            // 如果還沒偵測到任何東西，就不動作
+            if (!currentDetectedCode) {
+                return;
+            }
+
+            // 彈出確認視窗 (模擬 Standalone 邏輯，但接續原本的 Inventory 功能)
+            if (confirm(`掃描到資料：\n${currentDetectedCode}\n\n確定要加入庫存嗎？`)) {
+                // 停止掃描
+                stopScan(true);
+                
+                // 呼叫原本的資料輸入流程
+                saveDataPrompt(currentDetectedCode);
+            } else {
+                // 使用者按取消，重置狀態繼續掃描
+                currentDetectedCode = null;
+                const hint = document.getElementById('cam-hint-text');
+                hint.innerText = "👀 掃描中... 請對準條碼/QR";
+                hint.style.color = "white";
+            }
+        }
+
+        // 3. 停止相機
+        function stopScan(isSuccess = false) {
+            if (!html5QrCode || !isScanning) return;
+
+            html5QrCode.stop().then(() => {
+                isScanning = false;
+                const overlay = document.getElementById('scan-overlay');
+                const hint = document.getElementById('cam-hint-text');
+                
+                overlay.style.display = "none"; 
+                hint.style.display = "flex";
+                
+                // 回到待機狀態
+                hint.innerText = "👆 點擊畫面開始掃描";
+                hint.style.color = "white";
+                
+                currentDetectedCode = null;
+                html5QrCode.clear(); // 清理記憶體
+            }).catch(err => {
+                console.error("停止失敗", err);
+            });
+        }
+
+        // ==========================================
+        // 📊 庫存管理功能 (保留原功能)
+        // ==========================================
 
         function changeUser(val) {
             val = val.trim();
@@ -339,267 +373,6 @@
         function saveCurrentInventory() {
             let key = `inventory_${savedUser}`;
             localStorage.setItem(key, JSON.stringify(inventory));
-        }
-
-        function openSettings() {
-            appSettings = JSON.parse(localStorage.getItem('appSettings')) || {};
-            document.getElementById('set_decimals').value = appSettings.decimals;
-            document.getElementById('set_minLen').value = appSettings.minLen;
-            document.getElementById('set_maxLen').value = appSettings.maxLen;
-            document.getElementById('set_filename').value = appSettings.filenameFormat;
-            
-            document.getElementById('display_cloudUrl').value = SYSTEM_CONFIG.API_URL;
-            document.getElementById('display_sheetUrl').value = SYSTEM_CONFIG.SHEET_URL;
-            
-            document.getElementById('settingsModal').style.display = 'flex';
-        }
-
-        function closeSettings() { document.getElementById('settingsModal').style.display = 'none'; }
-
-        function saveSettings() {
-            appSettings.decimals = parseInt(document.getElementById('set_decimals').value);
-            appSettings.minLen = parseInt(document.getElementById('set_minLen').value);
-            appSettings.maxLen = parseInt(document.getElementById('set_maxLen').value);
-            appSettings.filenameFormat = document.getElementById('set_filename').value.trim();
-            localStorage.setItem('appSettings', JSON.stringify(appSettings));
-            
-            closeSettings();
-            renderTable();
-            alert("✅ 設定已儲存");
-        }
-
-        function openCloudSheet() {
-            window.open(SYSTEM_CONFIG.SHEET_URL, '_blank');
-        }
-
-        function switchMode(mode) {
-            currentMode = mode;
-            document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
-            document.querySelector(`.mode-btn[onclick="switchMode('${mode}')"]`).classList.add('active');
-
-            const readerEl = document.getElementById('reader');
-            const videoEl = document.getElementById('ocr-video');
-            const overlayEl = document.getElementById('ocr-overlay');
-            const flashBtn = document.getElementById('btn-flash');
-
-            stopOcrCamera();
-            stopBarcodeScanner().then(() => {
-                if (mode === 'barcode') {
-                    videoEl.style.display = 'none';
-                    overlayEl.style.display = 'none';
-                    readerEl.style.display = 'block';
-                    flashBtn.style.display = 'none';
-                    startBarcodeScanner();
-                } else {
-                    readerEl.style.display = 'none';
-                    videoEl.style.display = 'block';
-                    overlayEl.style.display = 'block';
-                    startOcrCamera().then(() => {
-                        if (videoTrack) {
-                            const capabilities = videoTrack.getCapabilities();
-                            if (capabilities.torch) {
-                                flashBtn.style.display = 'flex';
-                            }
-                        }
-                    });
-                }
-                isCameraActive = true;
-            });
-        }
-
-        function handleViewportClick() {
-            if (!isCameraActive) { switchMode(currentMode); return; }
-            if (currentMode === 'ocr') {
-                if (isScanning) { captureAndProcess(); } 
-                else { resumeScanning(); }
-            }
-        }
-
-        function stopScanning() {
-            isScanning = false;
-            const video = document.getElementById('ocr-video');
-            video.pause(); 
-            clearInterval(ocrAnalysisInterval); 
-            const box = document.getElementById('guideBox');
-            const text = document.getElementById('guideText');
-            box.classList.add('paused');
-            box.classList.remove('ready');
-            text.innerText = "👆 點擊畫面繼續偵測 Tap to Resume";
-        }
-
-        function resumeScanning() {
-            isScanning = true;
-            const video = document.getElementById('ocr-video');
-            video.play(); 
-            startImageAnalysis(video); 
-            const box = document.getElementById('guideBox');
-            const text = document.getElementById('guideText');
-            box.classList.remove('paused');
-            text.innerText = "請以中心線覆蓋文字";
-        }
-
-        let html5QrCode = null; 
-        function startBarcodeScanner() {
-            if (!html5QrCode) { html5QrCode = new Html5Qrcode("reader"); }
-            const config = { fps: 10, qrbox: { width: 250, height: 250 } };
-            html5QrCode.start({ facingMode: "environment" }, config, (decodedText) => {
-                html5QrCode.pause(); 
-                saveDataPrompt(decodedText); 
-            }, () => {}).catch(err => {
-                if (err.toString().includes("NotAllowed") || err.toString().includes("Permission")) {
-                    alert("❌ 無法存取相機，請至設定開啟權限");
-                } else {
-                    console.log("Barcode Start Error: " + err);
-                }
-            });
-        }
-
-        function stopBarcodeScanner() {
-            if (html5QrCode && html5QrCode.isScanning) {
-                return html5QrCode.stop().catch(err => console.log("Stop failed", err));
-            }
-            return Promise.resolve();
-        }
-
-        function resumeBarcodeScanner() { if (html5QrCode) html5QrCode.resume(); }
-
-        async function startOcrCamera() {
-            try {
-                const constraints = { video: { facingMode: "environment", width: { ideal: 3840 }, height: { ideal: 2160 }, focusMode: "continuous" } };
-                ocrStream = await navigator.mediaDevices.getUserMedia(constraints);
-                const video = document.getElementById('ocr-video');
-                video.srcObject = ocrStream;
-                videoTrack = ocrStream.getVideoTracks()[0];
-                isScanning = true;
-                startImageAnalysis(video);
-            } catch (err) { 
-                if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError' || err.toString().includes("Permission")) {
-                    alert("❌ 無法存取相機，請至設定開啟權限");
-                } else {
-                    console.log("Camera Error: " + err); 
-                }
-            }
-        }
-
-        function stopOcrCamera() {
-            if (ocrStream) { ocrStream.getTracks().forEach(track => track.stop()); ocrStream = null; }
-            if (ocrAnalysisInterval) { clearInterval(ocrAnalysisInterval); ocrAnalysisInterval = null; }
-            videoTrack = null;
-            isTorchOn = false;
-            document.getElementById('btn-flash').classList.remove('active');
-        }
-
-        function toggleTorch() {
-            if (!videoTrack) { alert("相機未啟動"); return; }
-            isTorchOn = !isTorchOn;
-            videoTrack.applyConstraints({ advanced: [{ torch: isTorchOn }] })
-            .then(() => {
-                const btn = document.getElementById('btn-flash');
-                if(isTorchOn) { 
-                    btn.style.backgroundColor = "#fff"; 
-                    btn.style.color = "#000"; 
-                } else { 
-                    btn.style.backgroundColor = "#ffc107"; 
-                    btn.style.color = "#333"; 
-                }
-            })
-            .catch(e => { 
-                isTorchOn = !isTorchOn; 
-                alert("⚠️ 無法開啟補光燈 (iPhone/Safari 可能不支援)"); 
-            });
-        }
-
-        function startImageAnalysis(video) {
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d', { willReadFrequently: true });
-            if (ocrAnalysisInterval) clearInterval(ocrAnalysisInterval);
-            ocrAnalysisInterval = setInterval(() => {
-                if (video.readyState === 4 && isScanning) { 
-                    canvas.width = video.videoWidth;
-                    canvas.height = video.videoHeight;
-                    const cropHeight = canvas.height * 0.045; 
-                    const cropY = (canvas.height - cropHeight) / 2;
-                    ctx.drawImage(video, 0, 0);
-                    const imgData = ctx.getImageData(0, cropY, canvas.width, cropHeight);
-                    const score = calculateContrast(imgData.data);
-                    updateGuideUI(score > 30); 
-                }
-            }, 200);
-        }
-
-        function calculateContrast(data) {
-            let sum = 0, count = 0;
-            for (let i = 0; i < data.length; i += 80) {
-                sum += (data[i] * 0.299 + data[i+1] * 0.587 + data[i+2] * 0.114); count++;
-            }
-            const mean = sum / count;
-            let variance = 0;
-            for (let i = 0; i < data.length; i += 80) {
-                const gray = (data[i] * 0.299 + data[i+1] * 0.587 + data[i+2] * 0.114);
-                variance += Math.pow(gray - mean, 2);
-            }
-            return Math.sqrt(variance / count);
-        }
-
-        function updateGuideUI(isGoodQuality) {
-            const box = document.getElementById('guideBox');
-            const text = document.getElementById('guideText');
-            if (!isScanning) return; 
-            if (isGoodQuality) { box.classList.add('ready'); text.innerText = "✅ Ready / Tap Screen"; } 
-            else { box.classList.remove('ready'); text.innerText = "請以中心線覆蓋文字"; }
-        }
-
-        function captureAndProcess() {
-            const video = document.getElementById('ocr-video');
-            if (currentMode !== 'ocr' || video.style.display === 'none') return;
-
-            video.pause();
-            stopScanning(); 
-
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            ctx.drawImage(video, 0, 0);
-
-            const cropHeight = canvas.height * 0.045; 
-            const cropY = (canvas.height - cropHeight) / 2;
-
-            const cropCanvas = document.createElement('canvas');
-            cropCanvas.width = canvas.width;
-            cropCanvas.height = cropHeight;
-            const cropCtx = cropCanvas.getContext('2d');
-            cropCtx.drawImage(canvas, 0, cropY, canvas.width, cropHeight, 0, 0, cropCanvas.width, cropCanvas.height);
-
-            document.getElementById('loading-overlay').style.display = 'flex';
-            document.getElementById('loading-text').innerText = "分析中... Analyzing...";
-            
-            Tesseract.recognize(
-                cropCanvas.toDataURL('image/jpeg'),
-                'eng',
-                { 
-                    tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.-',
-                    tessedit_pageseg_mode: '7' 
-                }
-            ).then(({ data: { text } }) => {
-                document.getElementById('loading-overlay').style.display = 'none';
-                processResult(text);
-            }).catch(err => {
-                document.getElementById('loading-overlay').style.display = 'none';
-                alert("OCR Error: " + err);
-            });
-        }
-
-        function processResult(text) {
-             let cleanText = text.replace(/[^a-zA-Z0-9.-]/g, "");
-             const strongPattern = /[A-Z0-9]+(-[A-Z0-9.]+){3,}/;
-             const match = cleanText.match(strongPattern);
-             if (match) { cleanText = match[0]; } 
-             cleanText = cleanText.replace(/^[-.]+|[-.]+$/g, "");
-
-            if (!cleanText) { alert("⚠️ 未偵測到文字，請重試"); return; }
-
-            saveDataPrompt(cleanText);
         }
 
         function renderTable() {
@@ -637,13 +410,13 @@
         function saveDataPrompt(initialText) {
             setTimeout(() => {
                 let code = prompt("1️⃣ 確認原始碼 (Code):", initialText);
-                if (code === null) return resumeScan(); 
+                if (code === null) return; 
                 code = code.replace(/[^a-zA-Z0-9.-]/g, "").trim();
-                if (!code) return resumeScan();
+                if (!code) return;
 
                 if (code.length < appSettings.minLen) {
                     alert(`❌ 字元過短 (<${appSettings.minLen})`);
-                    return resumeScan();
+                    return;
                 }
 
                 let item = inventory[code];
@@ -652,15 +425,15 @@
                 let defaultLoc = item ? item.location : lastLocation;
 
                 let name = prompt(`2️⃣ 輸入品名 (Name):`, defaultName);
-                if (name === null) return resumeScan();
+                if (name === null) return;
 
                 let qtyStr = prompt(`3️⃣ 輸入數量 (Qty):`, defaultQty);
-                if (qtyStr === null) return resumeScan();
+                if (qtyStr === null) return;
                 let qty = parseFloat(qtyStr);
                 if (isNaN(qty)) qty = 1.00;
 
                 let location = prompt(`4️⃣ 輸入庫位 (Location):`, defaultLoc);
-                if (location === null) return resumeScan();
+                if (location === null) return;
                 location = location.trim();
                 
                 if (location) {
@@ -668,12 +441,10 @@
                     localStorage.setItem('lastLocation', lastLocation);
                 }
 
-                // ============================================
-                // 🕒 印度時間 (IST) 紀錄功能 (UTC+5:30)
-                // ============================================
+                // 印度時間 (IST) UTC+5:30
                 const d = new Date();
                 const utc = d.getTime() + (d.getTimezoneOffset() * 60000);
-                const nd = new Date(utc + (3600000 * 5.5)); // +5.5 hours for IST
+                const nd = new Date(utc + (3600000 * 5.5)); 
                 const year = nd.getFullYear();
                 const month = String(nd.getMonth() + 1).padStart(2, '0');
                 const day = String(nd.getDate()).padStart(2, '0');
@@ -686,30 +457,13 @@
                     name: name || "No Name",
                     qty: qty,
                     location: location,
-                    scanTime: istTime // 儲存時間
+                    scanTime: istTime
                 };
 
                 saveCurrentInventory();
-                
-                // === 追蹤 (如果以後有加 GA) ===
-                if (typeof gtag === 'function') {
-                    gtag('event', 'scan_success', {
-                        'event_category': 'Inventory',
-                        'event_label': currentMode,
-                        'item_code': code
-                    });
-                }
-
                 renderTable();
-                resumeScan();
-
+                
             }, 100);
-        }
-
-        function resumeScan() {
-             if (currentMode === 'barcode') {
-                 resumeBarcodeScanner();
-             } 
         }
 
         function uploadToCloud() {
@@ -718,11 +472,8 @@
             
             if(!confirm("確定上傳至雲端?")) return;
 
-            // === 修改處：強制在確認後立刻清空庫位記憶 ===
-            // 這樣不需要等雲端回應，下一次掃描庫位就會是空白
             lastLocation = "";
             localStorage.removeItem('lastLocation'); 
-            // ===================================
 
             document.getElementById('loading-overlay').style.display = 'flex';
             document.getElementById('loading-text').innerText = "上傳中... Uploading...";
@@ -753,7 +504,6 @@
 
             alert("1. 準備匯出... (Starting Export)");
             try {
-                // === 修改處：增加 Time 欄位 ===
                 let csv = "\uFEFFCode,Spec,Location,Name,Qty,Time\n";
                 for (let k in inventory) {
                       let safeName = (inventory[k].name || "").replace(/,/g, " ").replace(/"/g, "");
@@ -761,7 +511,7 @@
                       let parts = k.split('-');
                       let middleTxt = parts.length >= 3 ? parts[1] : "";
                       let qtyFormatted = inventory[k].qty.toFixed(appSettings.decimals);
-                      let timeStr = inventory[k].scanTime || ""; // 取得時間
+                      let timeStr = inventory[k].scanTime || ""; 
 
                       csv += '="' + k + '","' + middleTxt + '","' + loc + '","' + safeName + '",' + qtyFormatted + ',"' + timeStr + '"\n';
                 }
@@ -770,13 +520,8 @@
                 let link = document.createElement("a");
                 link.href = url;
                 
-                // ============================================
-                // 🕒 TIMEZONE FIX: INDIA (IST) UTC+5:30
-                // ============================================
                 const d = new Date();
-                // 1. 取得 UTC 時間 (毫秒)
                 const utc = d.getTime() + (d.getTimezoneOffset() * 60000);
-                // 2. 加上印度時區偏移 (+5.5 小時)
                 const now = new Date(utc + (3600000 * 5.5));
 
                 const YYYY = now.getFullYear();
@@ -787,7 +532,7 @@
                 const ss = String(now.getSeconds()).padStart(2, '0');
                 
                 let filename = appSettings.filenameFormat;
-                filename = filename.replace("USER", savedUser).replace("YYYY", YYYY).replace("MM", MM).replace("DD", DD).replace("HH", HH).replace("mm", mm).replace("ss", ss).replace("SS", ss);
+                filename = filename.replace("USER", savedUser).replace("YYYY", YYYY).replace("MM", MM).replace("DD", DD).replace("HH", HH).replace("mm", mm).replace("ss", ss);
                 if (!filename.endsWith(".csv")) filename += ".csv";
 
                 if(!confirm(`準備匯出檔案：\n📄 ${filename}\n\n是否繼續？`)) return;
@@ -812,11 +557,36 @@
             }
         }
 
-        currentMode = 'ocr';
-        document.querySelector('.mode-btn[onclick="switchMode(\'ocr\')"]').classList.add('active');
-        document.querySelector('.mode-btn[onclick="switchMode(\'barcode\')"]').classList.remove('active');
-        document.getElementById('guideText').innerText = "👆 點擊畫面啟動相機 Tap to Start";
-        renderTable();
+        function openSettings() {
+            appSettings = JSON.parse(localStorage.getItem('appSettings')) || {};
+            document.getElementById('set_decimals').value = appSettings.decimals;
+            document.getElementById('set_minLen').value = appSettings.minLen;
+            document.getElementById('set_maxLen').value = appSettings.maxLen;
+            document.getElementById('set_filename').value = appSettings.filenameFormat;
+            
+            document.getElementById('display_cloudUrl').value = SYSTEM_CONFIG.API_URL;
+            document.getElementById('display_sheetUrl').value = SYSTEM_CONFIG.SHEET_URL;
+            
+            document.getElementById('settingsModal').style.display = 'flex';
+        }
+
+        function closeSettings() { document.getElementById('settingsModal').style.display = 'none'; }
+
+        function saveSettings() {
+            appSettings.decimals = parseInt(document.getElementById('set_decimals').value);
+            appSettings.minLen = parseInt(document.getElementById('set_minLen').value);
+            appSettings.maxLen = parseInt(document.getElementById('set_maxLen').value);
+            appSettings.filenameFormat = document.getElementById('set_filename').value.trim();
+            localStorage.setItem('appSettings', JSON.stringify(appSettings));
+            
+            closeSettings();
+            renderTable();
+            alert("✅ 設定已儲存");
+        }
+
+        function openCloudSheet() {
+            window.open(SYSTEM_CONFIG.SHEET_URL, '_blank');
+        }
     </script>
 </body>
 </html>
